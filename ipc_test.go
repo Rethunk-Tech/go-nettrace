@@ -176,6 +176,20 @@ func TestNoEndpointIsTyped(t *testing.T) {
 	}
 }
 
+func TestAnEndpointGoneBeforeTheDialIsNoEndpoint(t *testing.T) {
+	temp := t.TempDir()
+	t.Setenv("TMPDIR", temp)
+	// A dangling link matches the glob but fails the dial with ENOENT, as a pipe or socket that is not there does.
+	socket := filepath.Join(temp, "dotnet-diagnostic-"+strconv.Itoa(os.Getpid())+"-gone-socket")
+	if err := os.Symlink(filepath.Join(temp, "missing"), socket); err != nil {
+		t.Fatal(err)
+	}
+	_, err := StartTracing(context.Background(), os.Getpid(), Config{}, io.Discard)
+	if !errors.Is(err, ErrNoEndpoint) || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want ErrNoEndpoint wrapping os.ErrNotExist", err)
+	}
+}
+
 // startSilentSession starts a session whose endpoint answers the handshake, streams out until closed, and then
 // ignores every later connection.
 func startSilentSession(t *testing.T, w io.Writer) *Session {

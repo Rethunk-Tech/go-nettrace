@@ -71,5 +71,10 @@ func dialEndpoint(ctx context.Context, pid int) (io.ReadWriteCloser, error) {
 		}
 		last = err
 	}
+	// The Windows pipe name is not discovered first, so a pipe that does not exist yet surfaces only here; so does a
+	// socket removed between the glob and the dial.
+	if errors.Is(last, os.ErrNotExist) {
+		return nil, fmt.Errorf("%w (pid %d): %w", ErrNoEndpoint, pid, last)
+	}
 	return nil, last
 }
