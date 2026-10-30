@@ -7,12 +7,13 @@ it. It imports only the standard library, and no consumer package.
 ## Gate
 
 `gate` is the command. Each override in `.gate.toml` is there because a runner
-cannot resolve that check from PATH. The `windows-latest` test job is the only place
-Windows-only behaviour runs.
-`TestLive` runs on both legs and is the only test of the Windows diagnostics endpoint end to end; `TestPipeDisconnectIsEOF`
-covers how `transport_windows.go` reads a pipe the runtime has disconnected. The fake-socket tests in `ipc_test.go` are
-Unix only. Spin starts its work only when `TestLive` writes a line after the session starts, and the session stops
-only after Spin prints its result: a loaded 2-vCPU runner can spend longer than any fixed sleep starting the runtime.
+cannot resolve that check from PATH.
+
+`TestLive` runs on both legs and is the only end-to-end test of the Windows diagnostics endpoint;
+`TestPipeDisconnectIsEOF`, which runs only in the `windows-latest` job, covers how `transport_windows.go` reads a pipe
+the runtime has disconnected. The fake-socket tests in `ipc_test.go` are Unix only. Spin starts its work only when
+`TestLive` writes a line after the session starts, and the session stops only after Spin prints its result: no fixed
+sleep covers a loaded runner starting the runtime.
 
 ## Shape
 
@@ -26,7 +27,7 @@ only after Spin prints its result: a loaded 2-vCPU runner can spend longer than 
 - The high bit of an uncompressed event's MetadataId is the IsSorted flag and is masked. The advance to the next
   event is aligned to 4 bytes from the event size, which holds whether a writer counts its padding inside EventSize
   or after it.
-- Samples on one stack share one `[]Frame`: a startup trace has about a million samples and few distinct stacks.
+- Samples on one stack share one `[]Frame`: a trace has far more samples than distinct stacks.
 - `ThreadID` is 64-bit as in the format; narrowing merges distinct IDs.
 - A session writes to the caller's `io.Writer` and creates no file. `Stop` runs the stop once, every caller waits
   under its own context, and it returns only after the copy goroutine exits, so the writer is untouched afterwards.
@@ -49,4 +50,4 @@ only after Spin prints its result: a loaded 2-vCPU runner can spend longer than 
 | `wire.go` | IPC framing, `CollectTracing2` payload, replies, `RuntimeError` |
 | `endpoint.go` | Diagnostics endpoint discovery and dialing |
 | `transport_unix.go` | Unix socket dial |
-| `transport_windows.go` | Named-pipe open with busy retry |
+| `transport_windows.go` | Named-pipe open with busy retry; a disconnected pipe ends the stream |

@@ -68,7 +68,7 @@ trace, err := nettrace.Parse(&buf)
 
 ## Contracts
 
-| Contract | Behaviour |
+| Behaviour | Contract |
 | --- | --- |
 | `Parse` | Reads the whole stream into memory; wrap untrusted input in `io.LimitReader`. `ErrNotNettrace` without the magic, `ErrUnsupportedVersion` for V6 or a Trace object needing a newer reader, `ErrNoEvents` for a stream with no blocks. |
 | `Trace.Samples` | Ordered by timestamp, in nanoseconds. Samples on one stack share one `Frames` slice: do not modify it. |
@@ -79,7 +79,7 @@ trace, err := nettrace.Parse(&buf)
 | `Session.Stop` | Idempotent and safe from several goroutines. Never outlives its context. Nothing reaches the writer after it returns. |
 | Writer | Written from a goroutine until the stream ends; the package creates no files. |
 | Platforms | Unix socket on Linux and macOS, named pipe on Windows. Only the Linux container lookup (`/proc/<pid>/root`) is Linux specific. |
-| Formats | NetTrace V4/V5 only. The runtime streams V4 over IPC even on current releases. |
+| Formats | NetTrace V4/V5 only. The runtime streams V4 over IPC. |
 
 ## Requirements
 

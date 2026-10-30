@@ -13,7 +13,7 @@ Reads .NET EventPipe NetTrace streams into resolved CPU-sample stacks and attach
 
 `Parse` turns a NetTrace V4/V5 stream (what `dotnet-trace` and the runtime's diagnostics IPC write) into thread
 samples whose stack frames are named from the trace's own JIT, loader and rundown events, so no symbol files are
-needed. `StartTracing` starts such a stream from a running .NET process, with nothing but the standard library.
+needed. `StartTracing` starts such a stream from a running .NET process.
 
 ## Quick start
 

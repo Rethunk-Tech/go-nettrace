@@ -98,8 +98,8 @@ func resolveMethods(trace *Trace) {
 			trace.Methods[i].Assembly = trace.Assemblies[assemblyID]
 		}
 	}
-	// A startup trace holds about a million samples and tens of thousands of methods, so frames are matched by binary
-	// search over the methods sorted by start address.
+	// A trace holds many frames and many methods, so each frame is matched by binary search over the methods sorted
+	// by start address.
 	byStart := slices.Clone(trace.Methods)
 	slices.SortStableFunc(byStart, func(a, b Method) int { return cmp.Compare(a.StartAddress, b.StartAddress) })
 	done := make(map[*Frame]bool)
