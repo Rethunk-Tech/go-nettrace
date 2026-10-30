@@ -33,7 +33,7 @@ func installedRuntimes(ctx context.Context, t *testing.T) map[string]bool {
 
 func runDotnet(ctx context.Context, t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.CommandContext(ctx, "dotnet", args...) //nolint:gosec // G204: test helper; arguments are literals from this file
+	cmd := exec.CommandContext(ctx, "dotnet", args...) //nolint:gosec // G204: arguments are this file's literals and t.TempDir() paths
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "DOTNET_NOLOGO=1", "DOTNET_CLI_TELEMETRY_OPTOUT=1")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -54,14 +54,8 @@ func TestLive(t *testing.T) {
 	defer cancel()
 	runtimes := installedRuntimes(ctx, t)
 	project := t.TempDir()
-	for _, name := range []string{"Spin.csproj", "Program.cs"} {
-		data, err := os.ReadFile(filepath.Join("testdata", "spin", name)) //nolint:gosec // G304: name ranges over two literals
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(project, name), data, 0o600); err != nil { //nolint:gosec // G703: writes into t.TempDir()
-			t.Fatal(err)
-		}
+	if err := os.CopyFS(project, os.DirFS(filepath.Join("testdata", "spin"))); err != nil {
+		t.Fatal(err)
 	}
 	for _, target := range []string{"net6.0", "net8.0", "net9.0", "net10.0"} {
 		major := strings.TrimSuffix(strings.TrimPrefix(target, "net"), ".0")
