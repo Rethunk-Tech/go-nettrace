@@ -64,6 +64,17 @@ jobs:
         with:
           persist-credentials: false
 
+      # TestLive builds and samples a .NET project on each runtime it finds, and is the only test of the
+      # Windows named pipe.
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+            9.0.x
+            10.0.x
+
       # The race detector keeps a goroutine from becoming shared state unnoticed.
       - name: Test
         uses: Rethunk-Tech/gh-actions/setup-go@67ec8bd68343d915462729ad119c355740cf6205 # v1.22

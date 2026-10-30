@@ -1,0 +1,17 @@
+using System.Diagnostics;
+
+namespace Spin;
+
+static class Busy
+{
+    // Two distinct hot methods so a parser test can check samples land on each by name.
+    public static long Alpha(int ms) { var sw = Stopwatch.StartNew(); long n = 0; while (sw.ElapsedMilliseconds < ms) n++; return n; }
+    public static long Beta(int ms) { var sw = Stopwatch.StartNew(); long n = 0; while (sw.ElapsedMilliseconds < ms) n += 2; return n; }
+
+    static void Main()
+    {
+        Console.WriteLine(Alpha(600) + Beta(300));
+        // Stay alive until the caller closes stdin, so a trace session can stop while the process runs.
+        Console.In.ReadToEnd();
+    }
+}
