@@ -9,8 +9,10 @@ it. It imports only the standard library, and no consumer package.
 `gate` is the command. Each override in `.gate.toml` is there because a runner
 cannot resolve that check from PATH. The `windows-latest` test job is the only place
 Windows-only behaviour runs.
-`TestLive` runs on both legs and is the only test of the Windows named pipe (`transport_windows.go`). The fake-socket
-tests in `ipc_test.go` are Unix only.
+`TestLive` runs on both legs and is the only test of the Windows diagnostics endpoint end to end; `TestPipeDisconnectIsEOF`
+covers how `transport_windows.go` reads a pipe the runtime has disconnected. The fake-socket tests in `ipc_test.go` are
+Unix only. Spin starts its work only when `TestLive` writes a line after the session starts, and the session stops
+only after Spin prints its result: a loaded 2-vCPU runner can spend longer than any fixed sleep starting the runtime.
 
 ## Shape
 
@@ -31,7 +33,8 @@ tests in `ipc_test.go` are Unix only.
 - Each IPC frame is one `Write`: a runtime that has read the whole frame may hang up, and a second write would fail.
   Only a `0xFF/0x00` reply is a success; `0xFF/0xFF` is a `*RuntimeError`.
 - Rundown is on by default: methods JIT-compiled before the session started resolve only from the rundown events.
-- The Windows pipe is opened with `os.OpenFile` and a busy pipe is retried until the context ends.
+- The Windows pipe is opened with `os.OpenFile` and a busy pipe is retried until the context ends. A read that fails
+  with `ERROR_PIPE_NOT_CONNECTED` is the end of the stream: the runtime ends a session by flushing and disconnecting.
 
 ## Files
 
