@@ -6,6 +6,8 @@ Notable changes to `go-nettrace`. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-29
+
 ### Added
 
 - `Parse` reads a NetTrace V4/V5 stream into CPU samples with each stack frame resolved to method, type and
@@ -15,4 +17,5 @@ Notable changes to `go-nettrace`. The format follows
   diagnostics IPC (Unix socket or Windows named pipe, container-aware on Linux), streaming the nettrace bytes into a
   caller-supplied `io.Writer`; a refused request is a `*RuntimeError`.
 
-[Unreleased]: https://github.com/Rethunk-Tech/go-nettrace/commits/main
+[Unreleased]: https://github.com/Rethunk-Tech/go-nettrace/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Rethunk-Tech/go-nettrace/releases/tag/v0.1.0
