@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -325,5 +326,14 @@ func TestStartHonoursItsContext(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start ignored its context")
+	}
+}
+
+func TestRuntimeErrorText(t *testing.T) {
+	if got := (&RuntimeError{}).Error(); strings.Contains(got, "HRESULT") {
+		t.Errorf("no code, yet %q", got)
+	}
+	if got := (&RuntimeError{HResult: 0x80070005}).Error(); !strings.Contains(got, "0x80070005") {
+		t.Errorf("code missing from %q", got)
 	}
 }
