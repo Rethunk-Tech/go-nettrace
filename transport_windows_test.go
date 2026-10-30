@@ -3,6 +3,7 @@
 package nettrace
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -65,9 +66,10 @@ func TestPipeDisconnectIsEOF(t *testing.T) {
 		served <- nil
 	}()
 
-	got, err := io.ReadAll(conn)
-	if err != nil || string(got) != "stream" {
-		t.Errorf("read %q, %v; want %q and a clean end", got, err, "stream")
+	// io.Copy, as the session's stream copy uses, so a WriterTo on the connection cannot bypass its Read.
+	var got bytes.Buffer
+	if _, err := io.Copy(&got, conn); err != nil || got.String() != "stream" {
+		t.Errorf("read %q, %v; want %q and a clean end", got.String(), err, "stream")
 	}
 	if err := <-served; err != nil {
 		t.Fatal(err)
