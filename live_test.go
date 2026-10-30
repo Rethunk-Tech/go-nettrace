@@ -1,6 +1,7 @@
 package nettrace
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -78,6 +79,10 @@ func liveTarget(ctx context.Context, t *testing.T, target, dll string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +101,14 @@ func liveTarget(ctx context.Context, t *testing.T, target, dll string) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	time.Sleep(1500 * time.Millisecond)
+	// A fixed sleep cannot cover a loaded runner's startup plus the work, so the session stops only once Spin has
+	// printed its result.
+	if _, err := io.WriteString(stdin, "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bufio.NewReader(stdout).ReadString('\n'); err != nil {
+		t.Fatal(err)
+	}
 	stopCtx, stopCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer stopCancel()
 	if err := session.Stop(stopCtx); err != nil {

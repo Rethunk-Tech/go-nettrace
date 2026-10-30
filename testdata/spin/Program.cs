@@ -10,8 +10,11 @@ static class Busy
 
     static void Main()
     {
+        // The work waits for a line on stdin, so a tracer can attach first however slow the runtime is to start, and
+        // the printed result tells it the work is done. The process then stays alive until stdin closes, so the
+        // session stops while it runs.
+        Console.ReadLine();
         Console.WriteLine(Alpha(600) + Beta(300));
-        // Stay alive until the caller closes stdin, so a trace session can stop while the process runs.
         Console.In.ReadToEnd();
     }
 }
