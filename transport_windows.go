@@ -24,15 +24,22 @@ const (
 // pipe ends the stream at ERROR_PIPE_NOT_CONNECTED. The runtime ends a session by flushing and then disconnecting
 // its end of the pipe, after which a read fails with that error rather than returning EOF; NamedPipeClientStream in
 // .NET reads it as EOF too. os already maps ERROR_BROKEN_PIPE to EOF.
-type pipe struct{ *os.File }
+//
+// The file is a named field rather than embedded: embedding would promote os.File's WriteTo, and io.Copy would take
+// that path and read the file directly, past this Read.
+type pipe struct{ file *os.File }
 
 func (p pipe) Read(b []byte) (int, error) {
-	n, err := p.File.Read(b)
+	n, err := p.file.Read(b)
 	if errors.Is(err, errPipeNotConnected) {
 		return n, io.EOF
 	}
 	return n, err
 }
+
+func (p pipe) Write(b []byte) (int, error) { return p.file.Write(b) }
+
+func (p pipe) Close() error { return p.file.Close() }
 
 // openEndpoint opens the runtime's diagnostics named pipe, which Windows exposes as a file path. A busy pipe is
 // retried until ctx ends, as the runtime's own client does.
