@@ -13,7 +13,9 @@ cannot resolve that check from PATH.
 `TestPipeDisconnectIsEOF`, which runs only in the `windows-latest` job, covers how `transport_windows.go` reads a pipe
 the runtime has disconnected. The fake-socket tests in `ipc_test.go` are Unix only. Spin starts its work only when
 `TestLive` writes a line after the session starts, and the session stops only after Spin prints its result: no fixed
-sleep covers a loaded runner starting the runtime.
+sleep covers a loaded runner starting the runtime. `NETTRACE_RECORD=<path>` makes `TestLive` write its net8.0 trace
+there, which is how `testdata/spin.nettrace` is re-recorded; Spin builds in `t.TempDir()` because a build in the
+checkout bakes its path into the trace.
 
 ## Shape
 
@@ -36,6 +38,13 @@ sleep covers a loaded runner starting the runtime.
 - Rundown is on by default: methods JIT-compiled before the session started resolve only from the rundown events.
 - The Windows pipe is opened with `os.OpenFile` and a busy pipe is retried until the context ends. A read that fails
   with `ERROR_PIPE_NOT_CONNECTED` is the end of the stream: the runtime ends a session by flushing and disconnecting.
+- On .NET 10 the innermost frame of a managed sample is the runtime's GC-poll helper, with the user method one frame
+  out. A consumer that attributes samples takes the innermost frame it recognises, not `Frames[0]`.
+- Out of scope: a NetTrace V6 reader (a different layout; nothing a runtime streams over IPC is V6), generic event
+  payload decoding, the other IPC commands (CollectTracing3 to 6, Dump, Profiler, Process), the reverse diagnostics
+  port (`DOTNET_DiagnosticPorts`, the only way to sample from a process's first instruction) and macOS app-sandbox
+  sockets. Unload and rundown `DCStart` events are ignored: a module or assembly live at the session's end is named by
+  its Load or `DCEnd` event, and decoding the others needs a fixture with a collectible-context unload.
 
 ## Files
 
