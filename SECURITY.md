@@ -14,10 +14,15 @@ Please do not open a public issue for a suspected vulnerability first.
 
 ## What is in scope
 
-<!-- scaffold: the untrusted inputs this package handles, and each property a crafted input must not
-break (an escape, an unbounded allocation, a panic). One bullet each, naming the API. -->
+- **`Parse` input.** A crafted nettrace must not panic, loop forever or allocate more than a small multiple of its
+  own size. Block, stack and payload counts are checked against the bytes that remain before they size an
+  allocation. `FuzzParse` covers it. `Parse` reads the whole stream, so the caller bounds an untrusted reader.
+- **IPC replies.** A hostile or broken peer on the diagnostics endpoint must not make `StartTracing` or `Stop` panic,
+  allocate beyond one 64 KiB frame, or outlive its context.
 
 ## What is out of scope
 
-<!-- scaffold: what the caller is trusted to have checked already, and behaviour that is intended
-rather than a vulnerability. -->
+- Which process to attach to. A diagnostics endpoint is a same-user, same-host channel: attaching to it lets the
+  caller read that process's runtime events, which is the purpose.
+- Memory use proportional to the size of a stream the caller chose to read.
+- The content of the writer passed to `StartTracing`: the bytes are the runtime's, unparsed.

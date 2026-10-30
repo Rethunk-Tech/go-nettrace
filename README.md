@@ -11,8 +11,9 @@
 
 Reads .NET EventPipe NetTrace streams into resolved CPU-sample stacks and attaches to a running .NET process over its diagnostics IPC. Package `nettrace`, module `github.com/Rethunk-Tech/go-nettrace`.
 
-<!-- scaffold: one short paragraph on what the package guarantees and why it exists, in plain
-words. -->
+`Parse` turns a NetTrace V4/V5 stream (what `dotnet-trace` and the runtime's diagnostics IPC write) into thread
+samples whose stack frames are named from the trace's own JIT, loader and rundown events, so no symbol files are
+needed. `StartTracing` starts such a stream from a running .NET process, with nothing but the standard library.
 
 ## Quick start
 
@@ -24,7 +25,12 @@ A worked example and the contracts: [HUMANS.md](HUMANS.md).
 
 ## Features
 
-<!-- scaffold: 3 to 6 bullets, each a capability a caller can rely on. No roadmap. -->
+- Frames resolve to method, declaring type and assembly by address.
+- Samples carry a 64-bit thread ID and whether the thread was in managed code.
+- Newer or unknown formats (NetTrace V6) are refused with `ErrUnsupportedVersion`, never guessed at.
+- Finds a process's diagnostics socket or named pipe, including a containerised process's `TMPDIR` on Linux.
+- Every call is bound to its `context.Context`, and `Stop` never outlives it.
+- Standard library only.
 
 ## Documentation
 
