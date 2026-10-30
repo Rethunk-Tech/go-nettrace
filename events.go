@@ -187,8 +187,9 @@ func parseUncompressedV5Event(body []byte, state *v5EventState) (rawEvent, bool)
 	return rawEvent{timestamp: timestamp, threadID: thread, metadata: metadataID, stackID: stack, payload: body[offset : offset+payloadSize]}, true
 }
 
-// parseV5Metadata records the provider and event ID of a metadata record. The event name and the field layouts that
-// follow are not read: events are recognised by (provider, ID), which is how the runtime manifests number them.
+// parseV5Metadata records the provider and event ID of a metadata record. A record cut off before the end of its
+// event name is dropped. The name's value and the field layouts that follow are not used: events are recognised by
+// (provider, ID), which is how the runtime manifests number them.
 func parseV5Metadata(payload []byte, metadata map[uint32]eventMetadata) {
 	cursor := 0
 	metadataID, ok := readUint32(payload, &cursor)
@@ -201,6 +202,9 @@ func parseV5Metadata(payload []byte, metadata map[uint32]eventMetadata) {
 	}
 	eventID, ok := readUint32(payload, &cursor)
 	if !ok {
+		return
+	}
+	if _, ok := readWideNull(payload, &cursor); !ok {
 		return
 	}
 	metadata[metadataID] = eventMetadata{provider: provider, eventID: eventID}

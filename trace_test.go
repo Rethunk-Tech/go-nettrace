@@ -151,6 +151,11 @@ func TestParseMetadataRecord(t *testing.T) {
 	if got := metadata[7]; got.provider != "Provider" || got.eventID != 143 {
 		t.Fatalf("metadata = %+v", got)
 	}
+	cut := map[uint32]eventMetadata{}
+	parseV5Metadata(payload[:len(payload)-2], cut)
+	if len(cut) != 0 {
+		t.Fatalf("a record cut inside its event name was kept: %+v", cut)
+	}
 }
 
 func TestParseStackRecord(t *testing.T) {
