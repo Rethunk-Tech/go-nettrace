@@ -14,7 +14,10 @@ static class Busy
         // the printed result tells it the work is done. The process then stays alive until stdin closes, so the
         // session stops while it runs.
         Console.ReadLine();
-        Console.WriteLine(Alpha(600) + Beta(300));
+        // Short alternating rounds, so however late sampling starts it misses both methods in proportion.
+        long total = 0;
+        for (var i = 0; i < 15; i++) total += Alpha(40) + Beta(20);
+        Console.WriteLine(total);
         Console.In.ReadToEnd();
     }
 }
