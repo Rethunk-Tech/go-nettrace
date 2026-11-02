@@ -38,7 +38,7 @@ func listenAsRuntime(t *testing.T) net.Listener {
 		t.Skipf("socket path is %d bytes, over the %d a unix socket holds; run with a shorter TMPDIR", len(socket), maxUnixSocketPath)
 	}
 	var listenConfig net.ListenConfig
-	listener, err := listenConfig.Listen(context.Background(), "unix", socket)
+	listener, err := listenConfig.Listen(t.Context(), "unix", socket)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,11 +91,11 @@ func TestSessionUsesDiagnosticsSocket(t *testing.T) {
 	}()
 
 	var out bytes.Buffer
-	session, err := StartTracing(context.Background(), os.Getpid(), Config{}, &out)
+	session, err := StartTracing(t.Context(), os.Getpid(), Config{}, &out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := session.Stop(context.Background()); err != nil {
+	if err := session.Stop(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if out.String() != "Nettrace" {
@@ -171,7 +171,7 @@ func TestAReplyFromAnotherCommandSetIsRefused(t *testing.T) {
 func TestNoEndpointIsTyped(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	// pid 1<<30 is above any real pid_max.
-	_, err := StartTracing(context.Background(), 1<<30, Config{}, io.Discard)
+	_, err := StartTracing(t.Context(), 1<<30, Config{}, io.Discard)
 	if !errors.Is(err, ErrNoEndpoint) || !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("err = %v, want ErrNoEndpoint wrapping os.ErrNotExist", err)
 	}
@@ -185,7 +185,7 @@ func TestAnEndpointGoneBeforeTheDialIsNoEndpoint(t *testing.T) {
 	if err := os.Symlink(filepath.Join(temp, "missing"), socket); err != nil {
 		t.Fatal(err)
 	}
-	_, err := StartTracing(context.Background(), os.Getpid(), Config{}, io.Discard)
+	_, err := StartTracing(t.Context(), os.Getpid(), Config{}, io.Discard)
 	if !errors.Is(err, ErrNoEndpoint) || !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("err = %v, want ErrNoEndpoint wrapping os.ErrNotExist", err)
 	}
@@ -222,7 +222,7 @@ func startSilentSession(t *testing.T, w io.Writer) *Session {
 			defer func() { _ = conn.Close() }()
 		}
 	}()
-	session, err := StartTracing(context.Background(), os.Getpid(), Config{}, w)
+	session, err := StartTracing(t.Context(), os.Getpid(), Config{}, w)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func startSilentSession(t *testing.T, w io.Writer) *Session {
 func TestStopHonoursItsContextAndIsIdempotent(t *testing.T) {
 	session := startSilentSession(t, io.Discard)
 	for range 2 {
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 		returned := make(chan error, 1)
 		go func() { returned <- session.Stop(ctx) }()
 		select {
@@ -249,11 +249,11 @@ func TestStopHonoursItsContextAndIsIdempotent(t *testing.T) {
 
 func TestConcurrentStopHonoursItsOwnContext(t *testing.T) {
 	session := startSilentSession(t, io.Discard)
-	long, cancelLong := context.WithTimeout(context.Background(), 2*time.Second)
+	long, cancelLong := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancelLong()
 	go func() { _ = session.Stop(long) }()
 	time.Sleep(100 * time.Millisecond)
-	short, cancelShort := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	short, cancelShort := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancelShort()
 	start := time.Now()
 	if err := session.Stop(short); err == nil {
@@ -287,7 +287,7 @@ func TestNothingIsWrittenAfterStopReturns(t *testing.T) {
 	var w countingWriter
 	session := startSilentSession(t, &w)
 	time.Sleep(50 * time.Millisecond)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	if err := session.Stop(ctx); err == nil {
 		t.Fatal("Stop against a silent endpoint reported success")
@@ -312,7 +312,7 @@ func TestStartHonoursItsContext(t *testing.T) {
 			time.Sleep(3 * time.Second)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 	returned := make(chan error, 1)
 	go func() {

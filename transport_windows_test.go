@@ -4,7 +4,6 @@ package nettrace
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -39,7 +38,7 @@ func TestPipeDisconnectIsEOF(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = syscall.CloseHandle(server) })
 
-	conn, err := openEndpoint(context.Background(), name)
+	conn, err := openEndpoint(t.Context(), name)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,7 +51,7 @@ func TestLive(t *testing.T) {
 	if _, err := exec.LookPath("dotnet"); err != nil {
 		t.Skip("dotnet is not on PATH")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 	runtimes := installedRuntimes(ctx, t)
 	project := t.TempDir()
