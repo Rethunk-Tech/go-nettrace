@@ -75,6 +75,9 @@ func TestLive(t *testing.T) {
 func liveTarget(ctx context.Context, t *testing.T, target, dll string) {
 	t.Helper()
 	cmd := exec.CommandContext(ctx, "dotnet", dll) //nolint:gosec // G204: dll is the test's own build output
+	// The runtime opens its diagnostics endpoint only when these are on, and a shell that exports them as 0 would
+	// otherwise reach the child.
+	cmd.Env = append(os.Environ(), "DOTNET_EnableDiagnostics=1", "DOTNET_EnableDiagnostics_IPC=1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
