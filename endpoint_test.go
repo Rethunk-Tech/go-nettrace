@@ -58,6 +58,7 @@ func TestEndpointsThatAreNotOwnSocketsAreRefused(t *testing.T) {
 // serveSession answers the start handshake and then stream bytes, and answers one stop request when asked to.
 func serveSession(t *testing.T, stream []byte) (stopped <-chan struct{}) {
 	t.Helper()
+
 	listener := listenAsRuntime(t)
 	done := make(chan struct{})
 	go func() {
@@ -98,6 +99,53 @@ func TestStreamPastTheByteCapIsRefused(t *testing.T) {
 	}
 	if w.count() != 1000 {
 		t.Fatalf("writer holds %d bytes, want the cap 1000", w.count())
+	}
+}
+
+// zeros is an endless stream of zero bytes.
+type zeros struct{}
+
+func (zeros) Read(p []byte) (int, error) { clear(p); return len(p), nil }
+
+// An endpoint that never stops sending is cut off at the default cap, and only then answers the stop, so a session
+// without a cap waits out its context instead.
+func TestAnEndlessStreamIsCutOffAtTheDefaultCap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("streams a gigabyte")
+	}
+	listener := listenAsRuntime(t)
+	go func() {
+		first, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = first.Close() }()
+		if _, _, _, err := readFrame(first); err != nil {
+			return
+		}
+		_ = reply(first, binary.LittleEndian.AppendUint64(nil, 41))
+		_, _ = io.Copy(first, zeros{})
+		second, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = second.Close() }()
+		if _, _, _, err := readFrame(second); err == nil {
+			_ = reply(second, nil)
+		}
+	}()
+	var w countingWriter
+	session, err := StartTracing(t.Context(), os.Getpid(), Config{}, &w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := session.Stop(ctx); err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Stop = %v, want the stream cut off at the cap", err)
+	}
+	if w.count() > 1<<30 {
+		t.Fatalf("writer holds %d bytes, past the default cap", w.count())
 	}
 }
 
