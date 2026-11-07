@@ -26,15 +26,18 @@ func endpointCandidates(pid int) ([]string, error) {
 	}
 	// The runtime creates its socket under its own TMPDIR, which in a container is a path inside the container's
 	// root: /proc/<pid>/root reaches it from the host.
+	// The process's own TMPDIR comes first: a socket there cannot have been planted by another user of a shared
+	// /tmp, which is searched last.
 	root := filepath.Join("/proc", strconv.Itoa(pid), "root")
-	dirs := []string{os.TempDir(), filepath.Join(root, "tmp")}
+	var dirs []string
 	if env, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "environ")); err == nil {
 		for entry := range strings.SplitSeq(string(env), "\x00") {
 			if value, ok := strings.CutPrefix(entry, "TMPDIR="); ok && value != "" {
-				dirs = append(dirs, value, filepath.Join(root, value))
+				dirs = append(dirs, filepath.Join(root, value), value)
 			}
 		}
 	}
+	dirs = append(dirs, filepath.Join(root, "tmp"), os.TempDir())
 	seen := make(map[string]bool)
 	var matches []string
 	for _, dir := range dirs {
@@ -46,9 +49,13 @@ func endpointCandidates(pid int) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		matches = append(matches, found...)
+		slices.Sort(found)
+		for _, path := range found {
+			if endpointTrusted(path, pid) {
+				matches = append(matches, path)
+			}
+		}
 	}
-	slices.Sort(matches)
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("%w (pid %d): %w", ErrNoEndpoint, pid, os.ErrNotExist)
 	}

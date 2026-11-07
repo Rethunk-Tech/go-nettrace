@@ -62,3 +62,6 @@ func openEndpoint(ctx context.Context, path string) (io.ReadWriteCloser, error) 
 		}
 	}
 }
+
+// endpointTrusted is true: a Windows pipe name is not discovered by a directory scan.
+func endpointTrusted(string, int) bool { return true }
