@@ -6,6 +6,8 @@ Notable changes to `go-nettrace`. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
 ### Fixed
 
 - `StartTracing` dials only a socket owned by the target process's user, not a link or other file, and searches the process's own `TMPDIR` before the shared temp directory.
@@ -25,5 +27,6 @@ Notable changes to `go-nettrace`. The format follows
   diagnostics IPC (Unix socket or Windows named pipe, container-aware on Linux), streaming the nettrace bytes into a
   caller-supplied `io.Writer`; a refused request is a `*RuntimeError`.
 
-[Unreleased]: https://github.com/Rethunk-Tech/go-nettrace/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Rethunk-Tech/go-nettrace/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Rethunk-Tech/go-nettrace/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Rethunk-Tech/go-nettrace/releases/tag/v0.1.0
