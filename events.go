@@ -37,8 +37,8 @@ type v5EventState struct {
 	payloadSize   uint64
 }
 
-func parseV5Events(data []byte, metadata map[uint32]eventMetadata, metadataBlock, compressed bool) []rawEvent {
-	var out []rawEvent
+// appendV5Events appends the block's events to out, so a trace's events live in one slice rather than one per block.
+func appendV5Events(out []rawEvent, data []byte, metadata map[uint32]eventMetadata, metadataBlock, compressed bool) []rawEvent {
 	state := v5EventState{}
 	if compressed {
 		for offset := 0; offset < len(data); {
@@ -279,15 +279,15 @@ func align4(value int) int {
 	return (value + 3) &^ 3
 }
 
-func parseV5EventBlock(block []byte, metadata map[uint32]eventMetadata, metadataBlock bool) []rawEvent {
+func appendV5EventBlock(out []rawEvent, block []byte, metadata map[uint32]eventMetadata, metadataBlock bool) []rawEvent {
 	if len(block) < 20 {
-		return nil
+		return out
 	}
 	headerSize := int(binary.LittleEndian.Uint16(block[:2]))
 	blockFlags := binary.LittleEndian.Uint16(block[2:4])
 	if headerSize < 20 || headerSize > len(block) {
-		return nil
+		return out
 	}
 	compressed := blockFlags&1 != 0
-	return parseV5Events(block[headerSize:], metadata, metadataBlock, compressed)
+	return appendV5Events(out, block[headerSize:], metadata, metadataBlock, compressed)
 }

@@ -57,7 +57,7 @@ func parseV5(data []byte, trace *Trace, metadata map[uint32]eventMetadata, event
 	}
 	for _, block := range blocks {
 		if block.kind == "MetadataBlock" {
-			parseV5EventBlock(data[block.blockStart:block.blockEnd], metadata, true)
+			appendV5EventBlock(nil, data[block.blockStart:block.blockEnd], metadata, true)
 		}
 	}
 	// Stack IDs are only unique until the next sequence point, which flushes the stack cache and lets later stack
@@ -72,9 +72,10 @@ func parseV5(data []byte, trace *Trace, metadata map[uint32]eventMetadata, event
 				current[stack.id] = stack.frames
 			}
 		case "EventBlock":
-			for _, event := range parseV5EventBlock(data[block.blockStart:block.blockEnd], metadata, false) {
-				event.frames = current[event.stackID]
-				*events = append(*events, event)
+			first := len(*events)
+			*events = appendV5EventBlock(*events, data[block.blockStart:block.blockEnd], metadata, false)
+			for i := first; i < len(*events); i++ {
+				(*events)[i].frames = current[(*events)[i].stackID]
 			}
 		}
 	}

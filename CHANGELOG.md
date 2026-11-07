@@ -11,6 +11,7 @@ Notable changes to `go-nettrace`. The format follows
 - `StartTracing` dials only a socket owned by the target process's user, not a link or other file, and searches the process's own `TMPDIR` before the shared temp directory.
 - `Config.MaxStreamBytes` (default 1 GiB) caps the stream copied to the writer; more is `ErrStreamTooLarge`.
 - `Session.Stop` runs the shared stop under its own 30 second timeout instead of the first caller's context, so one caller's cancellation no longer fails another's.
+- `Parse` appends events into one slice and sizes `Samples` once, cutting total allocation for a stream of minimal sample events from 554 to 235 times its size.
 - SECURITY.md states `Parse`'s measured memory instead of a small multiple.
 
 ## [0.1.0] - 2026-10-29

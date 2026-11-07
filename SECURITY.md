@@ -16,9 +16,9 @@ Please do not open a public issue for a suspected vulnerability first.
 
 - **`Parse` input.** A crafted nettrace must not panic or loop forever. Memory is proportional to the input but
   not a small multiple of it: a compressed sample event is 2 bytes on the wire and a 48-byte `Sample` once decoded,
-  and a stream of nothing else measured 554 times its size in total allocation (2,000,455 bytes in, 1,108,771,864
-  allocated, 1,000,000 samples out). The caller therefore bounds the reader to the size it can afford to hold 600
-  times over. Block, stack and payload counts are checked against the bytes that remain before they size an
+  and a stream of nothing else measured 235 times its size in total allocation (`BenchmarkParseMinimalSamples`: 2,000,455 bytes in, about
+  470,000,000 allocated, 1,000,000 samples out; 554 times before events were appended into one slice). The caller
+  therefore bounds the reader to the size it can afford to hold 250 times over. Block, stack and payload counts are checked against the bytes that remain before they size an
   allocation. `FuzzParse` covers it. `Parse` reads the whole stream, so the caller bounds an untrusted reader.
 - **IPC replies.** A hostile or broken peer on the diagnostics endpoint must not make `StartTracing` or `Stop` panic,
   allocate beyond one 64 KiB frame, or outlive its context.

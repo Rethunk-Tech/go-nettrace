@@ -209,7 +209,7 @@ func TestUnsortedEventKeepsItsMetadataID(t *testing.T) {
 	t.Parallel()
 	// The runtime sets the high bit of MetadataId on an unsorted event and counts its padding inside EventSize.
 	data := appendEvent(nil, uncompressedBody(7|1<<31, 1, 4), 0)
-	events := parseV5Events(data, nil, false, false)
+	events := appendV5Events(nil, data, nil, false, false)
 	if len(events) != 1 || events[0].metadata != 7 {
 		t.Fatalf("events = %+v, want one with metadata 7", events)
 	}
@@ -221,7 +221,7 @@ func TestEventsPaddedOutsideEventSizeAreAllRead(t *testing.T) {
 	// the padding.
 	data := appendEvent(nil, uncompressedBody(7, 1, 3), 1)
 	data = appendEvent(data, uncompressedBody(8, 2, 4), 0)
-	events := parseV5Events(data, nil, false, false)
+	events := appendV5Events(nil, data, nil, false, false)
 	if len(events) != 2 || events[0].metadata != 7 || events[1].metadata != 8 || events[1].threadID != 2 {
 		t.Fatalf("events = %+v, want metadata 7 then 8", events)
 	}
@@ -231,7 +231,7 @@ func TestThreadIDKeepsAll64Bits(t *testing.T) {
 	t.Parallel()
 	const thread = 0x1_0000_0001
 	data := appendEvent(nil, uncompressedBody(7, thread, 0), 0)
-	events := parseV5Events(data, nil, false, false)
+	events := appendV5Events(nil, data, nil, false, false)
 	if len(events) != 1 || events[0].threadID != thread {
 		t.Fatalf("events = %+v, want thread %#x", events, uint64(thread))
 	}

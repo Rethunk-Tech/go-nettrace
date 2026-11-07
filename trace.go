@@ -93,6 +93,7 @@ func Parse(r io.Reader) (*Trace, error) {
 	slices.SortStableFunc(events, func(a, b rawEvent) int { return cmp.Compare(a.timestamp, b.timestamp) })
 	// Samples on the same stack share one frame slice: a trace has far more samples than distinct stacks.
 	shared := make(map[*uint64][]Frame)
+	trace.Samples = make([]Sample, 0, len(events))
 	for _, event := range events {
 		meta := metadata[event.metadata]
 		if meta.provider != ProviderSampleProfiler || meta.eventID != threadSampleID {
