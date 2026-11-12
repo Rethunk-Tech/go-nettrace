@@ -18,7 +18,24 @@ func FuzzParse(f *testing.F) {
 	zeroed := bytes.Clone(trace[:16<<10])
 	clear(zeroed[8:64])
 	f.Add(zeroed)
-	f.Fuzz(func(_ *testing.T, data []byte) {
-		_, _ = Parse(bytes.NewReader(data))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		got, err := Parse(bytes.NewReader(data))
+		if err != nil {
+			if got != nil {
+				t.Fatal("Parse returned a trace with an error")
+			}
+			return
+		}
+		if got == nil {
+			t.Fatal("Parse returned nil without an error")
+		}
+		if got.Assemblies == nil || got.Modules == nil {
+			t.Fatal("Parse returned nil maps")
+		}
+		for i := 1; i < len(got.Samples); i++ {
+			if got.Samples[i].Timestamp < got.Samples[i-1].Timestamp {
+				t.Fatalf("samples not ordered by timestamp at %d", i)
+			}
+		}
 	})
 }
