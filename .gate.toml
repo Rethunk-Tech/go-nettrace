@@ -6,9 +6,11 @@
 # through `go tool`, or the checksummed download for actionlint, which is not a
 # module.
 # Builds the pinned lint and vuln binaries once, so the gates that need them
-# never race each other's cold `go tool` link.
+# never race each other's cold `go tool` link. The two links are independent, and
+# on a cold cache they are this repository's longest step: run them at once, and
+# still fail if either fails.
 [gates.tools]
-run = "go tool -n golangci-lint >/dev/null && go tool -n govulncheck >/dev/null"
+run = "go tool -n golangci-lint >/dev/null & lint=$!; go tool -n govulncheck >/dev/null & vuln=$!; wait $lint && wait $vuln"
 
 [gates.lint]
 run = "go tool golangci-lint run --allow-parallel-runners ./..."
