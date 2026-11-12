@@ -45,6 +45,7 @@ func runDotnet(ctx context.Context, t *testing.T, dir string, args ...string) {
 // TestLive samples a real .NET process end to end on every installed runtime among the project's targets. The
 // project is built in a temporary folder, because building in place would record the checkout path in the trace.
 func TestLive(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("-short skips the live .NET test")
 	}
@@ -52,12 +53,17 @@ func TestLive(t *testing.T) {
 		t.Skip("dotnet is not on PATH")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
-	defer cancel()
+	// Cleanup, not defer: the parallel subtests below are this test's to outlive, and a deferred cancel would
+	// fire when this function returns, before they start.
+	t.Cleanup(cancel)
 	runtimes := installedRuntimes(ctx, t)
 	project := t.TempDir()
 	if err := os.CopyFS(project, os.DirFS(filepath.Join("testdata", "spin"))); err != nil {
 		t.Fatal(err)
 	}
+	// One build for every target: a build per target re-runs MSBuild's evaluation, restore and reference
+	// resolution each time, which is most of this test's cost. The outputs land under bin/Release/<target>/.
+	runDotnet(ctx, t, project, "build", "-c", "Release")
 	for _, target := range []string{"net6.0", "net8.0", "net9.0", "net10.0"} {
 		major := strings.TrimSuffix(strings.TrimPrefix(target, "net"), ".0")
 		if !runtimes[major] {
@@ -65,9 +71,10 @@ func TestLive(t *testing.T) {
 			continue
 		}
 		t.Run(target, func(t *testing.T) {
-			out := filepath.Join(project, "out-"+target)
-			runDotnet(ctx, t, project, "build", "-c", "Release", "-f", target, "-o", out)
-			liveTarget(ctx, t, target, filepath.Join(out, "Spin.dll"))
+			// Each target is its own process and its own session, so their startup and sampling overlap; the
+			// work itself waits for the tracer, so no fixed sleep has to cover a loaded runner.
+			t.Parallel()
+			liveTarget(ctx, t, target, filepath.Join(project, "bin", "Release", target, "Spin.dll"))
 		})
 	}
 }
