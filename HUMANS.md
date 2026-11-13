@@ -70,7 +70,7 @@ trace, err := nettrace.Parse(&buf)
 
 | Behaviour | Contract |
 | --- | --- |
-| `Parse` | Reads the whole stream into memory; wrap untrusted input in `io.LimitReader`. `ErrNotNettrace` without the magic, `ErrUnsupportedVersion` for V6 or a Trace object needing a newer reader, `ErrNoEvents` for a stream with no blocks. |
+| `Parse` | Reads the whole stream into memory, at most `DefaultMaxStreamBytes`; a longer one is `ErrStreamTooLarge`. `ErrNotNettrace` without the magic, `ErrUnsupportedVersion` for V6 or a Trace object needing a newer reader, `ErrNoEvents` for a stream with no blocks. |
 | `Trace.Samples` | Ordered by timestamp, in nanoseconds. Samples on one stack share one `Frames` slice: do not modify it. |
 | `Frame` | An address no method-load event covers keeps its `IP` with empty names. |
 | `Sample.Managed` | False for a thread in native code. |

@@ -285,3 +285,14 @@ func TestRuntimeAndRundownNumberTheirEventsDifferently(t *testing.T) {
 		t.Errorf("rundown event 154 not decoded as a module: %v", trace.Modules)
 	}
 }
+
+func TestParseRefusesAStreamOverTheByteCap(t *testing.T) {
+	t.Parallel()
+	data := readFixture(t)
+	if _, err := parseLimited(bytes.NewReader(data), int64(len(data))-1); !errors.Is(err, ErrStreamTooLarge) {
+		t.Fatalf("err = %v, want ErrStreamTooLarge", err)
+	}
+	if _, err := parseLimited(bytes.NewReader(data), int64(len(data))); err != nil {
+		t.Fatal(err)
+	}
+}

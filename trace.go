@@ -70,11 +70,19 @@ type Trace struct {
 }
 
 // Parse reads a NetTrace V4/V5 stream, the format the runtime streams over its diagnostics IPC and dotnet-trace
-// writes. It reads the whole stream into memory: wrap an untrusted reader in io.LimitReader.
+// writes. It reads the whole stream into memory, at most DefaultMaxStreamBytes of it: a longer stream is
+// ErrStreamTooLarge.
 func Parse(r io.Reader) (*Trace, error) {
-	data, err := io.ReadAll(r)
+	return parseLimited(r, DefaultMaxStreamBytes)
+}
+
+func parseLimited(r io.Reader, limit int64) (*Trace, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, ErrStreamTooLarge
 	}
 	if !bytes.HasPrefix(data, []byte("Nettrace")) {
 		return nil, ErrNotNettrace
