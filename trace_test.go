@@ -296,3 +296,19 @@ func TestParseRefusesAStreamOverTheByteCap(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestResolveMethodsNamesFrameWhenLaterStartHasEnded(t *testing.T) {
+	t.Parallel()
+	trace := &Trace{
+		Methods: []Method{
+			{StartAddress: 0x1000, Size: 0x200, Name: "Outer", Namespace: "T"},
+			{StartAddress: 0x1100, Size: 0x20, Name: "Inner", Namespace: "T"},
+		},
+		Samples: []Sample{{Frames: []Frame{{IP: 0x1150}}}},
+	}
+	resolveMethods(trace)
+	frame := trace.Samples[0].Frames[0]
+	if frame.Method != "Outer" || frame.Type != "T" {
+		t.Fatalf("frame = %+v, want Outer in T", frame)
+	}
+}

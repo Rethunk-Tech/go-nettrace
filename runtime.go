@@ -99,9 +99,29 @@ func resolveMethods(trace *Trace) {
 		}
 	}
 	// A trace holds many frames and many methods, so each frame is matched by binary search over the methods sorted
-	// by start address.
+	// by start address. Nested JIT ranges mean the last method to start at or before an IP may have already ended;
+	// parent[i] is the latest-starting earlier method still open when i starts, so a miss walks the nest instead of
+	// every earlier method.
 	byStart := slices.Clone(trace.Methods)
 	slices.SortStableFunc(byStart, func(a, b Method) int { return cmp.Compare(a.StartAddress, b.StartAddress) })
+	parent := make([]int, len(byStart))
+	open := make([]int, 0, len(byStart))
+	for i := range byStart {
+		start := byStart[i].StartAddress
+		for len(open) > 0 {
+			last := byStart[open[len(open)-1]]
+			if last.StartAddress+last.Size > start {
+				break
+			}
+			open = open[:len(open)-1]
+		}
+		if len(open) == 0 {
+			parent[i] = -1
+		} else {
+			parent[i] = open[len(open)-1]
+		}
+		open = append(open, i)
+	}
 	done := make(map[*Frame]bool)
 	for sampleIndex := range trace.Samples {
 		stack := trace.Samples[sampleIndex].Frames
@@ -111,18 +131,16 @@ func resolveMethods(trace *Trace) {
 		done[&stack[0]] = true
 		for frameIndex := range stack {
 			frame := &stack[frameIndex]
-			// The candidate is the last method starting at or before the frame's address.
 			next := sort.Search(len(byStart), func(i int) bool { return byStart[i].StartAddress > frame.IP })
-			if next == 0 {
-				continue
+			for candidate := next - 1; candidate >= 0; candidate = parent[candidate] {
+				method := byStart[candidate]
+				if frame.IP < method.StartAddress+method.Size {
+					frame.Method = method.Name
+					frame.Type = method.Namespace
+					frame.Assembly = method.Assembly
+					break
+				}
 			}
-			method := byStart[next-1]
-			if frame.IP >= method.StartAddress+method.Size {
-				continue
-			}
-			frame.Method = method.Name
-			frame.Type = method.Namespace
-			frame.Assembly = method.Assembly
 		}
 	}
 }
