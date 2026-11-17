@@ -6,7 +6,6 @@ import (
 
 type v5Block struct {
 	kind       string
-	dataStart  int
 	blockStart int
 	blockEnd   int
 }
@@ -114,7 +113,7 @@ func v5BlockBounds(data []byte, dataStart int, kind string) (v5Block, bool) {
 	if blockSize < 8 || blockEnd > len(data) {
 		return v5Block{}, false
 	}
-	return v5Block{kind: kind, dataStart: dataStart, blockStart: blockStart, blockEnd: blockEnd}, true
+	return v5Block{kind: kind, blockStart: blockStart, blockEnd: blockEnd}, true
 }
 
 func parseTraceFields(data []byte, trace *Trace) {

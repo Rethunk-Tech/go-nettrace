@@ -27,14 +27,11 @@ type stackRecord struct {
 }
 
 type v5EventState struct {
-	metadataID    uint32
-	sequence      uint64
-	captureThread uint64
-	processor     uint64
-	thread        uint64
-	stack         uint64
-	timestamp     uint64
-	payloadSize   uint64
+	metadataID  uint32
+	thread      uint64
+	stack       uint64
+	timestamp   uint64
+	payloadSize uint64
 }
 
 // appendV5Events appends the block's events to out, so a trace's events live in one slice rather than one per block.
@@ -60,7 +57,7 @@ func appendV5Events(out []rawEvent, data []byte, metadata map[uint32]eventMetada
 		if eventSize <= 0 || offset+4+eventSize > len(data) {
 			break
 		}
-		event, ok := parseUncompressedV5Event(data[offset+4:offset+4+eventSize], &state)
+		event, ok := parseUncompressedV5Event(data[offset+4 : offset+4+eventSize])
 		if ok {
 			if metadataBlock {
 				parseV5Metadata(event.payload, metadata)
@@ -95,21 +92,16 @@ func parseCompressedV5Event(body []byte, state *v5EventState) (rawEvent, int, bo
 		state.metadataID = uint32FromUint64(value)
 	}
 	if flags&2 != 0 {
-		value, ok := read()
-		if !ok {
+		// Sequence, capture thread and processor: present in the compressed header, unused after.
+		if _, ok := read(); !ok {
 			return rawEvent{}, 0, false
 		}
-		state.sequence += value
-		value, ok = read()
-		if !ok {
+		if _, ok := read(); !ok {
 			return rawEvent{}, 0, false
 		}
-		state.captureThread = value
-		value, ok = read()
-		if !ok {
+		if _, ok := read(); !ok {
 			return rawEvent{}, 0, false
 		}
-		state.processor = value
 	}
 	if flags&4 != 0 {
 		value, ok := read()
@@ -157,7 +149,7 @@ func parseCompressedV5Event(body []byte, state *v5EventState) (rawEvent, int, bo
 	return rawEvent{timestamp: state.timestamp, threadID: state.thread, metadata: state.metadataID, stackID: state.stack, payload: payload}, payloadEnd, true
 }
 
-func parseUncompressedV5Event(body []byte, state *v5EventState) (rawEvent, bool) {
+func parseUncompressedV5Event(body []byte) (rawEvent, bool) {
 	if len(body) < 4+4+8+8+4+4+8+16+16+4 {
 		return rawEvent{}, false
 	}
@@ -180,10 +172,6 @@ func parseUncompressedV5Event(body []byte, state *v5EventState) (rawEvent, bool)
 	if payloadSize < 0 || offset+payloadSize > len(body) {
 		return rawEvent{}, false
 	}
-	state.metadataID = metadataID
-	state.thread = thread
-	state.stack = stack
-	state.timestamp = timestamp
 	return rawEvent{timestamp: timestamp, threadID: thread, metadata: metadataID, stackID: stack, payload: body[offset : offset+payloadSize]}, true
 }
 
