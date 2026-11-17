@@ -129,14 +129,98 @@ func TestParseRefusesAStreamWithoutBlocks(t *testing.T) {
 
 func TestParseCompressedEvent(t *testing.T) {
 	t.Parallel()
-	state := v5EventState{}
-	body := []byte{0x88, 3, 10, 2, 0xaa, 0xbb}
-	event, used, ok := parseCompressedV5Event(body, &state)
-	if !ok || used != len(body) {
-		t.Fatalf("event parse = %v, used %d", ok, used)
+	guid := bytes.Repeat([]byte{0x11}, 16)
+	related := bytes.Repeat([]byte{0x22}, 16)
+	for _, tc := range []struct {
+		name    string
+		body    []byte
+		ok      bool
+		stack   uint64
+		ts      uint64
+		payload string
+	}{
+		{
+			name:    "stack and payload",
+			body:    []byte{0x88, 3, 10, 2, 0xaa, 0xbb},
+			ok:      true,
+			stack:   3,
+			ts:      10,
+			payload: "\xaa\xbb",
+		},
+		{
+			name:    "activity id",
+			body:    append(append([]byte{0x98, 3, 10}, guid...), 2, 0xaa, 0xbb),
+			ok:      true,
+			stack:   3,
+			ts:      10,
+			payload: "\xaa\xbb",
+		},
+		{
+			name:    "related activity id",
+			body:    append(append([]byte{0xa8, 3, 10}, related...), 2, 0xaa, 0xbb),
+			ok:      true,
+			stack:   3,
+			ts:      10,
+			payload: "\xaa\xbb",
+		},
+		{
+			name:    "both activity ids",
+			body:    append(append(append([]byte{0xb8, 3, 10}, guid...), related...), 2, 0xaa, 0xbb),
+			ok:      true,
+			stack:   3,
+			ts:      10,
+			payload: "\xaa\xbb",
+		},
+		{
+			name: "activity id fills the rest",
+			body: append([]byte{0x10, 1}, guid...),
+			ok:   true,
+			ts:   1,
+		},
+		{
+			name: "related activity id fills the rest",
+			body: append([]byte{0x20, 1}, related...),
+			ok:   true,
+			ts:   1,
+		},
+		{
+			name: "truncated activity id",
+			body: append([]byte{0x10, 1}, guid[:15]...),
+		},
+		{
+			name: "truncated related activity id",
+			body: append([]byte{0x20, 1}, related[:15]...),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			event, used, ok := parseCompressedV5Event(tc.body, &v5EventState{})
+			if ok != tc.ok {
+				t.Fatalf("ok = %v, want %v", ok, tc.ok)
+			}
+			if !tc.ok {
+				return
+			}
+			if used != len(tc.body) || event.stackID != tc.stack || event.timestamp != tc.ts || string(event.payload) != tc.payload {
+				t.Fatalf("event = %+v used %d", event, used)
+			}
+		})
 	}
-	if event.stackID != 3 || event.timestamp != 10 || string(event.payload) != "\xaa\xbb" {
-		t.Fatalf("event = %+v", event)
+}
+
+func TestNormalizeTimestamp(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		value, freq, want uint64
+	}{
+		{value: 42, freq: 0, want: 42},
+		{value: 42, freq: 1_000_000_000, want: 42},
+		{value: 10, freq: 10, want: 1_000_000_000},
+		{value: 5, freq: 2, want: 2_500_000_000},
+	} {
+		if got := normalizeTimestamp(tc.value, tc.freq); got != tc.want {
+			t.Errorf("normalizeTimestamp(%d, %d) = %d, want %d", tc.value, tc.freq, got, tc.want)
+		}
 	}
 }
 
