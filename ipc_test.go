@@ -31,7 +31,11 @@ func reply(conn io.Writer, payload []byte) error {
 // listenAsRuntime makes this process look like a .NET process with a diagnostics socket.
 func listenAsRuntime(t *testing.T) net.Listener {
 	t.Helper()
-	temp := t.TempDir()
+	// t.TempDir() lives under the worktree, which is already longer than sun_path; os.TempDir is the short scratch root.
+	temp := filepath.Join(os.TempDir(), "n"+strconv.FormatInt(time.Now().UnixNano(), 36))
+	if err := os.Mkdir(temp, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("TMPDIR", temp)
 	socket := filepath.Join(temp, "dotnet-diagnostic-"+strconv.Itoa(os.Getpid())+"-test-socket")
 	if len(socket) > maxUnixSocketPath {
@@ -42,7 +46,11 @@ func listenAsRuntime(t *testing.T) net.Listener {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
+	t.Cleanup(func() {
+		_ = listener.Close()
+		_ = os.Remove(socket)
+		_ = os.Remove(temp)
+	})
 	return listener
 }
 
@@ -337,3 +345,186 @@ func TestRuntimeErrorText(t *testing.T) {
 		t.Errorf("code missing from %q", got)
 	}
 }
+
+func TestABrokenHandshakeNeverStartsASession(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		serve func(net.Conn)
+		check func(error) bool
+	}{
+		{
+			name: "peer hangs up before a reply",
+			serve: func(conn net.Conn) {
+				_, _, _, _ = readFrame(conn)
+				_ = conn.Close()
+			},
+			check: func(err error) bool { return err != nil },
+		},
+		{
+			name: "reply has no session id",
+			serve: func(conn net.Conn) {
+				_, _, _, _ = readFrame(conn)
+				_ = reply(conn, []byte{1, 2, 3, 4})
+			},
+			check: func(err error) bool {
+				return err != nil && strings.Contains(err.Error(), "session id")
+			},
+		},
+		{
+			name: "runtime error reply",
+			serve: func(conn net.Conn) {
+				_, _, _, _ = readFrame(conn)
+				_ = writeMessage(conn, commandSetServer, replyError, []byte{0x05, 0x00, 0x07, 0x80})
+			},
+			check: func(err error) bool {
+				_, ok := errors.AsType[*RuntimeError](err)
+				return ok
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener := listenAsRuntime(t)
+			go func() {
+				conn, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				defer func() { _ = conn.Close() }()
+				tc.serve(conn)
+			}()
+			_, err := StartTracing(t.Context(), os.Getpid(), Config{}, io.Discard)
+			if !tc.check(err) {
+				t.Fatalf("StartTracing = %v", err)
+			}
+		})
+	}
+}
+
+func TestABrokenStopClosesTheStream(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		serve func(listener net.Listener, first net.Conn, readyForStop chan struct{})
+		check func(error) bool
+	}{
+		{
+			name: "second endpoint is gone",
+			serve: func(listener net.Listener, first net.Conn, readyForStop chan struct{}) {
+				_ = listener.Close()
+				close(readyForStop)
+				_, _ = io.Copy(io.Discard, first)
+			},
+			check: func(err error) bool { return errors.Is(err, ErrNoEndpoint) },
+		},
+		{
+			name: "stop peer hangs up before a reply",
+			serve: func(listener net.Listener, first net.Conn, readyForStop chan struct{}) {
+				go func() { _, _ = io.Copy(io.Discard, first) }()
+				close(readyForStop)
+				second, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				_ = second.Close()
+			},
+			check: func(err error) bool { return err != nil },
+		},
+		{
+			name: "stop reply is a runtime error",
+			serve: func(listener net.Listener, first net.Conn, readyForStop chan struct{}) {
+				go func() { _, _ = io.Copy(io.Discard, first) }()
+				close(readyForStop)
+				second, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				defer func() { _ = second.Close() }()
+				_, _, _, _ = readFrame(second)
+				_ = writeMessage(second, commandSetServer, replyError, []byte{0x05, 0x00, 0x07, 0x80})
+			},
+			check: func(err error) bool {
+				_, ok := errors.AsType[*RuntimeError](err)
+				return ok
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listener := listenAsRuntime(t)
+			ready := make(chan struct{})
+			readyForStop := make(chan struct{})
+			go func() {
+				first, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				defer func() { _ = first.Close() }()
+				if _, _, _, err := readFrame(first); err != nil {
+					return
+				}
+				if err := reply(first, binary.LittleEndian.AppendUint64(nil, 41)); err != nil {
+					return
+				}
+				close(ready)
+				tc.serve(listener, first, readyForStop)
+			}()
+			session, err := StartTracing(t.Context(), os.Getpid(), Config{}, io.Discard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-ready:
+			case <-time.After(2 * time.Second):
+				t.Fatal("handshake did not finish")
+			}
+			select {
+			case <-readyForStop:
+			case <-time.After(2 * time.Second):
+				t.Fatal("stop fixture did not finish")
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+			defer cancel()
+			if err := session.Stop(ctx); !tc.check(err) {
+				t.Fatalf("Stop = %v", err)
+			}
+		})
+	}
+}
+
+func TestABytePastTheCapMarksTheStreamTooLarge(t *testing.T) {
+	t.Parallel()
+	client, server := net.Pipe()
+	go func() {
+		_, _ = server.Write([]byte("12345"))
+		_ = server.Close()
+	}()
+	session := &Session{conn: client, maxBytes: 4, done: make(chan struct{})}
+	var out bytes.Buffer
+	session.copyStream(&out)
+	if !errors.Is(session.streamErr, ErrStreamTooLarge) {
+		t.Fatalf("streamErr = %v, want ErrStreamTooLarge", session.streamErr)
+	}
+	if out.String() != "1234" {
+		t.Fatalf("writer = %q, want the four bytes inside the cap", out.String())
+	}
+}
+
+func TestStopReturnsItsOwnCancelWhenTheSharedStopIsStillRunning(t *testing.T) {
+	t.Parallel()
+	session := &Session{
+		conn: closedConn{},
+		done: make(chan struct{}),
+	}
+	session.stopOnce.Do(func() {})
+	session.stopDone = make(chan struct{})
+	close(session.done)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := session.Stop(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Stop = %v, want context.Canceled", err)
+	}
+}
+
+type closedConn struct{}
+
+func (closedConn) Read([]byte) (int, error)    { return 0, io.EOF }
+func (closedConn) Write(p []byte) (int, error) { return len(p), nil }
+func (closedConn) Close() error                { return nil }

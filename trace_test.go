@@ -191,6 +191,16 @@ func TestParseCompressedEvent(t *testing.T) {
 			name: "truncated related activity id",
 			body: append([]byte{0x20, 1}, related[:15]...),
 		},
+		{name: "empty"},
+		{name: "metadata varint truncated", body: []byte{0x01}},
+		{name: "sequence varint truncated", body: []byte{0x02}},
+		{name: "capture-thread varint truncated", body: []byte{0x02, 1}},
+		{name: "processor varint truncated", body: []byte{0x02, 1, 1}},
+		{name: "thread varint truncated", body: []byte{0x04}},
+		{name: "stack varint truncated", body: []byte{0x08}},
+		{name: "timestamp varint truncated", body: []byte{0x00}},
+		{name: "payload-size varint truncated", body: []byte{0x80, 1}},
+		{name: "payload longer than remaining", body: []byte{0x80, 1, 5}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -234,6 +244,13 @@ func TestParseMetadataRecord(t *testing.T) {
 	parseV5Metadata(payload, metadata)
 	if got := metadata[7]; got.provider != "Provider" || got.eventID != 143 {
 		t.Fatalf("metadata = %+v", got)
+	}
+	for _, cutAt := range []int{0, 4, 4 + 2*len("Provider") + 2} {
+		cut := map[uint32]eventMetadata{}
+		parseV5Metadata(payload[:cutAt], cut)
+		if len(cut) != 0 {
+			t.Fatalf("a record cut at %d bytes was kept: %+v", cutAt, cut)
+		}
 	}
 	cut := map[uint32]eventMetadata{}
 	parseV5Metadata(payload[:len(payload)-2], cut)
@@ -394,5 +411,68 @@ func TestResolveMethodsNamesFrameWhenLaterStartHasEnded(t *testing.T) {
 	frame := trace.Samples[0].Frames[0]
 	if frame.Method != "Outer" || frame.Type != "T" {
 		t.Fatalf("frame = %+v, want Outer in T", frame)
+	}
+}
+
+func TestAnEventBlockWithABadHeaderIsLeftEmpty(t *testing.T) {
+	t.Parallel()
+	metadata := map[uint32]eventMetadata{}
+	if got := appendV5EventBlock(nil, make([]byte, 19), metadata, false); got != nil {
+		t.Fatalf("a 19-byte block produced %v", got)
+	}
+	tooSmall := make([]byte, 24)
+	binary.LittleEndian.PutUint16(tooSmall, 19)
+	if got := appendV5EventBlock(nil, tooSmall, metadata, false); got != nil {
+		t.Fatalf("headerSize 19 produced %v", got)
+	}
+	tooLarge := make([]byte, 24)
+	binary.LittleEndian.PutUint16(tooLarge, 25)
+	if got := appendV5EventBlock(nil, tooLarge, metadata, false); got != nil {
+		t.Fatalf("headerSize past the block produced %v", got)
+	}
+}
+
+func TestAZeroEventSizeStopsTheBlock(t *testing.T) {
+	t.Parallel()
+	data := binary.LittleEndian.AppendUint32(nil, 0)
+	data = appendEvent(data, uncompressedBody(7, 1, 0), 0)
+	if events := appendV5Events(nil, data, nil, false, false); len(events) != 0 {
+		t.Fatalf("events after a zero EventSize = %+v", events)
+	}
+}
+
+func TestAnUncompressedEventThatOverrunsItsBodyIsDropped(t *testing.T) {
+	t.Parallel()
+	short := appendEvent(nil, make([]byte, 8), 0)
+	if events := appendV5Events(nil, short, nil, false, false); len(events) != 0 {
+		t.Fatalf("a header-only body produced %+v", events)
+	}
+	body := uncompressedBody(7, 1, 0)
+	binary.LittleEndian.PutUint32(body[4+4+8+8+4+4+8+16+16:], 100)
+	if events := appendV5Events(nil, appendEvent(nil, body, 0), nil, false, false); len(events) != 0 {
+		t.Fatalf("an oversized payload produced %+v", events)
+	}
+	if events := appendV5Events(nil, appendEvent(nil, uncompressedBody(0, 1, 0), 0), nil, false, false); len(events) != 0 {
+		t.Fatalf("metadata id 0 was kept: %+v", events)
+	}
+}
+
+func TestAStackWhoseSizeIsNotAMultipleOfThePointerWidthIsDropped(t *testing.T) {
+	t.Parallel()
+	block := binary.LittleEndian.AppendUint32(nil, 1)
+	block = binary.LittleEndian.AppendUint32(block, 1)
+	block = binary.LittleEndian.AppendUint32(block, 6)
+	block = append(block, 0, 1, 2, 3, 4, 5)
+	if stacks := parseV5StackBlock(block, 8); stacks != nil {
+		t.Fatalf("a 6-byte stack with 8-byte pointers was kept: %+v", stacks)
+	}
+	ok := binary.LittleEndian.AppendUint32(nil, 4)
+	ok = binary.LittleEndian.AppendUint32(ok, 1)
+	ok = binary.LittleEndian.AppendUint32(ok, 16)
+	ok = binary.LittleEndian.AppendUint64(ok, 0x1000)
+	ok = binary.LittleEndian.AppendUint64(ok, 0x2000)
+	stacks := parseV5StackBlock(ok, 3)
+	if len(stacks) != 1 || len(stacks[0].frames) != 2 || stacks[0].frames[1] != 0x2000 {
+		t.Fatalf("pointer size 3 (treated as 8) = %+v", stacks)
 	}
 }
