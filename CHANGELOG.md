@@ -6,6 +6,11 @@ Notable changes to `go-nettrace`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `Parse` reads at most `DefaultMaxStreamBytes`.
+- Frames covered by an outer nested method are named.
+
 ## [0.2.0] - 2026-11-07
 
 ### Fixed
