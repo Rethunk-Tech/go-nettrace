@@ -61,9 +61,19 @@ func TestLive(t *testing.T) {
 	if err := os.CopyFS(project, os.DirFS(filepath.Join("testdata", "spin"))); err != nil {
 		t.Fatal(err)
 	}
-	// One build for every target: a build per target re-runs MSBuild's evaluation, restore and reference
-	// resolution each time, which is most of this test's cost. The outputs land under bin/Release/<target>/.
-	runDotnet(ctx, t, project, "build", "-c", "Release")
+	// Restore reaches nuget.org whenever NuGet's index cache has expired; an outage there says nothing about tracing.
+	restore := exec.CommandContext(ctx, "dotnet", "restore")
+	restore.Dir = project
+	restore.Env = append(os.Environ(), "DOTNET_NOLOGO=1", "DOTNET_CLI_TELEMETRY_OPTOUT=1")
+	if out, err := restore.CombinedOutput(); err != nil {
+		if bytes.Contains(out, []byte("NU1301")) {
+			t.Skipf("nuget.org is unreachable: %v\n%s", err, out)
+		}
+		t.Fatalf("dotnet restore: %v\n%s", err, out)
+	}
+	// One build for every target: a build per target re-runs MSBuild's evaluation and reference resolution each
+	// time, which is most of this test's cost. The outputs land under bin/Release/<target>/.
+	runDotnet(ctx, t, project, "build", "-c", "Release", "--no-restore")
 	for _, target := range []string{"net6.0", "net8.0", "net9.0", "net10.0"} {
 		major := strings.TrimSuffix(strings.TrimPrefix(target, "net"), ".0")
 		if !runtimes[major] {
